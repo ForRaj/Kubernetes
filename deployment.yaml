@@ -1,37 +1,55 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: insecure-app
+  name: secure-app
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: insecure
+      app: secure
   template:
     metadata:
       labels:
-        app: insecure
+        app: secure
     spec:
-      hostNetwork: true  
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        fsGroup: 101
+        seccompProfile:
+          type: RuntimeDefault
       containers:
       - name: nginx
-        image: nginx:latest
+        image: nginxinc/nginx-unprivileged:1.27.5-alpine
+        imagePullPolicy: IfNotPresent
         securityContext:
-          privileged: true
-          allowPrivilegeEscalation: true   
-          runAsUser: 0                     
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
           capabilities:
-            add:
-              - ALL                        
+            drop:
+              - ALL
         ports:
-        - containerPort: 80
-        env:
-        - name: SECRET_KEY
-          value: "hardcoded-secret"     
+        - containerPort: 8080
+        resources:
+          requests:
+            cpu: 250m
+            memory: 256Mi
+          limits:
+            cpu: 500m
+            memory: 512Mi
         volumeMounts:
-        - mountPath: /host
-          name: host-volume             
+        - mountPath: /var/cache/nginx
+          name: nginx-cache
+        - mountPath: /var/run
+          name: nginx-run
+        - mountPath: /tmp
+          name: tmp
       volumes:
-      - name: host-volume
-        hostPath:
-          path: /                        
+      - name: nginx-cache
+        emptyDir: {}
+      - name: nginx-run
+        emptyDir: {}
+      - name: tmp
+        emptyDir: {}
