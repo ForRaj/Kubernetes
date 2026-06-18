@@ -1,0 +1,72 @@
+name: Security Scanning
+
+on:
+  push:
+    branches:
+      - main
+      - master
+      - work
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+jobs:
+  sast:
+    name: SAST (Semgrep)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Semgrep SAST
+        uses: docker://semgrep/semgrep:latest
+        with:
+          args: semgrep scan --config p/default --sarif --output semgrep.sarif
+
+      - name: Upload Semgrep SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: semgrep.sarif
+
+  container-scan:
+    name: Container and Kubernetes scanning (Trivy)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Scan Kubernetes manifests
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          scan-type: config
+          scan-ref: .
+          format: sarif
+          output: trivy-config.sarif
+          severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
+
+      - name: Upload Kubernetes manifest SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-config.sarif
+          category: trivy-config
+
+      - name: Scan nginx container image
+        uses: aquasecurity/trivy-action@v0.36.0
+        with:
+          image-ref: nginx:latest
+          format: sarif
+          output: trivy-image.sarif
+          severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
+
+      - name: Upload container image SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-image.sarif
+          category: trivy-image
